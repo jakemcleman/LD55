@@ -61,6 +61,8 @@ fn main() {
                 (0, vec![("thrust", 4, 2), ("rapier", 1, 3), ("withdrew", 4, 3)]),
                 (2, vec![("teapot", 1, 2), ("subordinates", 5, 3)]),
                 (0, vec![("cosmetic", 2, 6), ("ghosting", 4, 3)]),
+                (3, vec![("expose", 2, 0), ("gaping", 4, 1), ("shreds", 1, 3)]),
+                (4, vec![("gyrating", 2, 5), ("spaceflights", 8, 7)]),
             ],
             current: 0,
         })
@@ -231,6 +233,7 @@ fn load_demons(
     demon_art.sprites.push(asset_server.load("sprites/demon02.png"));
     demon_art.sprites.push(asset_server.load("sprites/demon03.png"));
     demon_art.sprites.push(asset_server.load("sprites/demon04.png"));
+    demon_art.sprites.push(asset_server.load("sprites/demon05.png"));
 
     println!("{} demonic arts loaded", demon_art.sprites.len());
 }
