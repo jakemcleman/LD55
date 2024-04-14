@@ -4,8 +4,10 @@ use bevy_prototype_lyon::prelude::*;
 use rand::random;
 
 use crate::worldlist::*;
+use crate::squashes::*;
 
 mod worldlist;
+mod squashes;
 
 fn main() {
     App::new()
@@ -67,6 +69,7 @@ fn main() {
         .add_systems(Startup, (load_fonts, load_demons, spawn_camera, spawn_edit_buttons, spawn_circle).chain())
         .add_systems(Update, (update_active_ring, update_mouse_position, select_letters, handle_backspace, handle_reset, handle_next_level, check_complete, spawn_next_level).chain())
         .add_systems(Update, (draw_selection, update_word_display, animate_demon, spin_rings))
+        .add_systems(Update, squish_effects)
         .run();
 }
 
@@ -192,6 +195,7 @@ fn spawn_edit_buttons(
         BackspaceButton {
             active: true,
         },
+        SquishEffect::new(Vec3::ONE, Vec3::splat(2.), 0.01, 0., 0.25),
     ));
 
     commands.spawn((
@@ -203,6 +207,7 @@ fn spawn_edit_buttons(
         ResetButton {
             active: true,
         },
+        SquishEffect::new(Vec3::ONE, Vec3::splat(2.), 0.01, 0., 0.25),
     ));
 
     commands.spawn((
@@ -409,6 +414,7 @@ fn spawn_ring(
                 radius: 64.,
                 layer
             },
+            SquishEffect::new(Vec3::ONE, Vec3::splat(2.), 0.01, 0., 0.25),
         )).set_parent(parent);
     }
 
@@ -531,7 +537,7 @@ fn update_mouse_position(
 
 fn select_letters(
     mut selection: ResMut<WordSelection>,
-    letters: Query<(&LetterDisplay, &Transform)>,
+    mut letters: Query<(&LetterDisplay, &Transform, &mut SquishEffect)>,
     mouse_state: Res<MousePosition>,
     mouse_buttons: Res<ButtonInput<MouseButton>>,
     mut character_events: EventReader<ReceivedCharacter>,
@@ -544,7 +550,7 @@ fn select_letters(
 
     let mut changed_this_frame = false;
 
-    for (letter, transform) in letters.iter() {
+    for (letter, transform, mut squish) in letters.iter_mut() {
         if letter.active {
             let mut mouse_selected = false;
 
@@ -564,7 +570,7 @@ fn select_letters(
 
                 changed_this_frame = true;
 
-                println!("selected {}", letter.letter);
+                squish.reset();
             }
         }
     }
@@ -642,13 +648,13 @@ fn handle_next_level(
 
 fn handle_reset(
     mut selection: ResMut<WordSelection>,
-    button_query: Query<(&Transform, &ResetButton)>,
+    mut button_query: Query<(&Transform, &ResetButton, &mut SquishEffect)>,
     mouse_pos: Res<MousePosition>,
     mouse_buttons: Res<ButtonInput<MouseButton>>,
 ) {
     let mut is_clicked = false;
 
-    let (transform, button) = button_query.single();
+    let (transform, button, mut squish) = button_query.single_mut();
 
     if button.active {
         if let Some(pos) = mouse_pos.pos {
@@ -662,6 +668,8 @@ fn handle_reset(
             selection.built_word.clear();
             selection.positions.clear();
             selection.changed_this_frame = true;
+
+            squish.reset();
         }
     }
 }
@@ -669,13 +677,13 @@ fn handle_reset(
 fn handle_backspace(
     mut selection: ResMut<WordSelection>,
     keys: Res<ButtonInput<KeyCode>>,
-    button_query: Query<(&Transform, &BackspaceButton)>,
+    mut button_query: Query<(&Transform, &BackspaceButton, &mut SquishEffect)>,
     mouse_pos: Res<MousePosition>,
     mouse_buttons: Res<ButtonInput<MouseButton>>,
 ) {
     let mut is_clicked = false;
 
-    let (transform, button) = button_query.single();
+    let (transform, button, mut squish) = button_query.single_mut();
 
     if button.active {
         if let Some(pos) = mouse_pos.pos {
@@ -690,6 +698,8 @@ fn handle_backspace(
                 selection.built_word.pop();
                 selection.positions.pop();
                 selection.changed_this_frame = true;
+
+                squish.reset();
             }
         }
     }
