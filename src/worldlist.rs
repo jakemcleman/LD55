@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 #[derive(Resource)]
 pub struct WordList {
-    pub all_valid_words: HashMap<usize, Vec<String>>,
+    pub all_valid_words: Vec<String>,
 }
 
 fn alphabet_index(letter: u8) -> usize {
@@ -61,26 +61,16 @@ fn is_valid_word(word: &str) -> bool {
 
 impl Default for WordList {
     fn default() -> Self {
-        let file_contents = include_str!("words/dict_words.txt");
+        let file_contents = include_str!("words/filtered.txt");
 
         let mut list = WordList {
-            all_valid_words: HashMap::new(),
+            all_valid_words: Vec::new(),
         };
 
         for word in file_contents.split_whitespace() {
             if is_valid_word(word) {
-                let distinct_letters = word_to_bits(word).count_ones() as usize;
-
-                if !list.all_valid_words.contains_key(&distinct_letters) {
-                    list.all_valid_words.insert(distinct_letters, Vec::new());
-                }
-                
-                list.all_valid_words.get_mut(&distinct_letters).unwrap().push(String::from(word));
+                list.all_valid_words.push(word.to_string());
             }
-        }
-
-        for (length, list) in list.all_valid_words.iter() {
-            println!("{} words of length {}", list.len(), length);
         }
 
         list
