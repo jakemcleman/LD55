@@ -285,7 +285,8 @@ fn spawn_next_level(
             commands.entity(entity).despawn_recursive();
         }
         
-        puzzles_list.current += 1;
+        puzzles_list.current = (puzzles_list.current + 1) % puzzles_list.list.len();
+
         spawn_level(puzzles_list.current, &puzzles_list,&mut commands,  &font_settings, &mut solution, &demons, &time);
 
         world_completion_writer.send(WordCompleteEvent{now_on_layer: 0});
