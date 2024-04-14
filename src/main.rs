@@ -47,9 +47,18 @@ fn main() {
                 (0, vec![("neuron", 4, 2), ("scraps", 2, 3)]),
                 (0, vec![("lethal", 3, 2), ("rocker", 1, 3)]),
                 (0, vec![("tyrant", 3, 5), ("turncoat", 2, 3)]),
+                (0, vec![("expire", 2, 2), ("lawful", 4, 3), ("gaming", 3, 3)]),
                 (0, vec![("threat", 3, 3), ("divulged", 1, 3)]),
+                (0, vec![("dashed", 3, 0), ("dunked", 1, 3), ("dumped", 3, 3)]),
                 (0, vec![("medium", 1, 4), ("eulogize", 4, 1)]),
+                (0, vec![("edible", 4, 3), ("snacks", 2, 3), ("spoils", 3, 1)]),
                 (1, vec![("damped", 3, 1), ("exorcise", 1, 2)]),
+                (0, vec![("cosmic", 2, 1), ("sundries", 3, 6)]),
+                (0, vec![("cleric", 2, 2), ("shirks", 4, 3), ("damned", 3, 3)]),
+                (0, vec![("dismayed", 4, 6), ("catholic", 1, 2)]),
+                (0, vec![("thrust", 4, 2), ("rapier", 1, 3), ("withdrew", 4, 3)]),
+                (0, vec![("teapot", 1, 2), ("subordinates", 5, 3)]),
+                (0, vec![("cosmetic", 2, 6), ("ghosting", 4, 3)]),
             ],
             current: 0,
         })
@@ -57,12 +66,14 @@ fn main() {
         .add_event::<PuzzleCompleteEvent>()
         .add_systems(Startup, (load_fonts, load_demons, spawn_camera, spawn_edit_buttons, spawn_circle).chain())
         .add_systems(Update, (update_active_ring, update_mouse_position, select_letters, handle_backspace, handle_reset, handle_next_level, check_complete, spawn_next_level).chain())
-        .add_systems(Update, (draw_selection, update_word_display, animate_demon))
+        .add_systems(Update, (draw_selection, update_word_display, animate_demon, spin_rings))
         .run();
 }
 
 #[derive(Component, Default)]
-struct RingLayer {}
+struct RingLayer {
+    layer: u32,
+}
 
 #[derive(Component, Default)]
 struct LevelObject {}
@@ -196,7 +207,7 @@ fn spawn_edit_buttons(
 
     commands.spawn((
         Text2dBundle {
-            text: Text::from_section(">", rune_fonts.display.clone()),
+            text: Text::from_section("NEXT", rune_fonts.display.clone()),
             transform: Transform::from_translation(Vec3::new(0., -350., 0.)),
             visibility: Visibility::Hidden,
             ..default()
@@ -346,7 +357,7 @@ fn spawn_puzzle(
         },
         DemonFace {
             base_scale: 4.,
-            fill_scale: 256.,
+            fill_scale: 350.,
             transition_time: 1.,
         },
         LevelObject {}
@@ -363,7 +374,7 @@ fn spawn_ring(
     solution_start_index: &usize,
     layer: u32,
 ) {
-    let parent = commands.spawn((TransformBundle::default(), RingLayer::default(), InheritedVisibility::default(), LevelObject {})).id();
+    let parent = commands.spawn((TransformBundle::default(), RingLayer { layer }, InheritedVisibility::default(), LevelObject {})).id();
     let length = word.len() - 1;
 
     let mut shuffled_word = vec![0; length];
@@ -711,4 +722,18 @@ fn update_word_display(
     rune_fonts: ResMut<RuneTextStyles>,
 ) {
     *(display_query.single_mut()) = Text::from_section(selection.built_word.clone(), rune_fonts.display.clone());
+}
+
+fn spin_rings(
+    time: Res<Time>,
+    selection: Res<WordSelection>,
+    mut rings: Query<(&mut Transform, &RingLayer)>,
+) {
+    if selection.current_layer as usize >= selection.complete_solution.len() {
+        for (mut transform, ring) in rings.iter_mut() {
+            let direction = if ring.layer % 2 == 0 { -1. } else { 1. };
+
+            transform.rotate_z(direction * time.delta_seconds() * 0.3);
+        }
+    }
 }
