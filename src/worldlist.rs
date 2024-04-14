@@ -51,12 +51,8 @@ fn is_valid_word(word: &str) -> bool {
         }
     }
 
-    let distinct_letters = word_to_bits(word).count_ones() as usize;
-
-    if distinct_letters < 4 { return false }
-
     let first_matches_last = word.as_bytes()[0] == word.as_bytes()[word.len() - 1];
-    return first_matches_last && distinct_letters == (word.len() - 1);
+    return first_matches_last;
 }
 
 impl Default for WordList {

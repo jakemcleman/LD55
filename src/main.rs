@@ -1,6 +1,7 @@
 use std::f32::consts::PI;
-use bevy::{asset::AssetMetaCheck, prelude::*};
+use bevy::{asset::{self, AssetMetaCheck}, prelude::*};
 use bevy_prototype_lyon::prelude::*;
+use rand::random;
 
 use crate::worldlist::*;
 
@@ -10,17 +11,18 @@ fn main() {
     App::new()
         .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(AssetMetaCheck::Never)
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Spell Circle".to_string(), // ToDo
-                // Bind to canvas included in `index.html`
-                canvas: Some("#bevy".to_owned()),
-                // Tells wasm not to override default event handling, like F5 and Ctrl+R
-                prevent_default_event_handling: false,
+        .add_plugins(DefaultPlugins.set(
+            WindowPlugin {
+                primary_window: Some(Window {
+                    title: "Spell Circle".to_string(), // ToDo
+                    // Bind to canvas included in `index.html`
+                    canvas: Some("#bevy".to_owned()),
+                    // Tells wasm not to override default event handling, like F5 and Ctrl+R
+                    prevent_default_event_handling: false,
+                    ..default()
+                }),
                 ..default()
-            }),
-            ..default()
-        }))
+            }).set(ImagePlugin::default_nearest()))
         .add_plugins(ShapePlugin)
         .insert_resource(WordList::default())
         .insert_resource(WordSelection {
@@ -28,23 +30,48 @@ fn main() {
             positions: Vec::new(),
             changed_this_frame: true,
             current_layer: 0,
+            current_layer_start_time: 0.,
             target_word: String::new(),
             complete_solution: Vec::new(),
         })
         .insert_resource(RuneTextStyles::default())
+        .insert_resource(DemonArts::default())
         .insert_resource(MousePosition {
             pos: None,
         })
+        .insert_resource(PuzzlesList {
+            list: vec![
+                (0, vec![("mayhem", 3, 1)]),
+                (0, vec![("entice", 4, 4)]),
+                (0, vec![("grasping", 3, 4)]),
+                (0, vec![("neuron", 4, 2), ("scraps", 2, 3)]),
+                (0, vec![("lethal", 3, 2), ("rocker", 1, 3)]),
+                (0, vec![("tyrant", 3, 5), ("turncoat", 2, 3)]),
+                (0, vec![("threat", 3, 3), ("divulged", 1, 3)]),
+                (0, vec![("medium", 1, 4), ("eulogize", 4, 1)]),
+                (1, vec![("damped", 3, 1), ("exorcise", 1, 2)]),
+            ],
+            current: 0,
+        })
         .add_event::<WordCompleteEvent>()
-        .add_systems(Startup, (load_fonts, spawn_camera, spawn_edit_buttons, spawn_circle).chain())
-        .add_systems(Update, (update_active_ring, update_mouse_position, select_letters, handle_backspace, handle_reset, check_complete).chain())
-        .add_systems(Update, (draw_selection, update_word_display))
+        .add_event::<PuzzleCompleteEvent>()
+        .add_systems(Startup, (load_fonts, load_demons, spawn_camera, spawn_edit_buttons, spawn_circle).chain())
+        .add_systems(Update, (update_active_ring, update_mouse_position, select_letters, handle_backspace, handle_reset, handle_next_level, check_complete, spawn_next_level).chain())
+        .add_systems(Update, (draw_selection, update_word_display, animate_demon))
         .run();
 }
 
 #[derive(Component, Default)]
 struct RingLayer {}
 
+#[derive(Component, Default)]
+struct LevelObject {}
+
+#[derive(Resource)]
+struct PuzzlesList {
+    list: Vec<(usize, Vec<(&'static str, usize, usize)>)>,
+    current: usize,
+}
 
 #[derive(Resource)]
 struct WordSelection {
@@ -52,6 +79,7 @@ struct WordSelection {
     positions: Vec<Vec2>,
     changed_this_frame: bool,
     current_layer: u32,
+    current_layer_start_time: f32,
     target_word: String,
     complete_solution: Vec<String>,
 }
@@ -61,6 +89,11 @@ struct RuneTextStyles {
     active: TextStyle,
     idle: TextStyle,
     display: TextStyle,
+}
+
+#[derive(Resource, Default)]
+struct DemonArts {
+    sprites: Vec<Handle<Image>>,
 }
 
 #[derive(Resource)]
@@ -95,11 +128,32 @@ struct WordCompleteEvent {
     now_on_layer: u32,
 }
 
-#[derive(Component)]
-struct BackspaceButton {}
+#[derive(Event)]
+struct PuzzleCompleteEvent {
+    
+}
+
+#[derive(Component, Default)]
+struct BackspaceButton {
+    active: bool
+}
+
+#[derive(Component, Default)]
+struct ResetButton {
+    active: bool
+}
+
+#[derive(Component, Default)]
+struct NextLevelButton {
+    active: bool
+}
 
 #[derive(Component)]
-struct ResetButton {}
+struct DemonFace {
+    base_scale: f32,
+    fill_scale: f32,
+    transition_time: f32,
+}
 
 fn spawn_camera(
     mut commands: Commands,
@@ -124,7 +178,9 @@ fn spawn_edit_buttons(
             transform: Transform::from_translation(Vec3::new(-50., -350., 0.)),
             ..default()
         },
-        BackspaceButton {},
+        BackspaceButton {
+            active: true,
+        },
     ));
 
     commands.spawn((
@@ -133,8 +189,32 @@ fn spawn_edit_buttons(
             transform: Transform::from_translation(Vec3::new(50., -350., 0.)),
             ..default()
         },
-        ResetButton {},
+        ResetButton {
+            active: true,
+        },
     ));
+
+    commands.spawn((
+        Text2dBundle {
+            text: Text::from_section(">", rune_fonts.display.clone()),
+            transform: Transform::from_translation(Vec3::new(0., -350., 0.)),
+            visibility: Visibility::Hidden,
+            ..default()
+        },
+        NextLevelButton {
+            active: false,
+        },
+    ));
+}
+
+fn load_demons(
+    mut demon_art: ResMut<DemonArts>,
+    asset_server: Res<AssetServer>,
+) {
+    demon_art.sprites.push(asset_server.load("sprites/demon01.png"));
+    demon_art.sprites.push(asset_server.load("sprites/demon02.png"));
+
+    println!("{} demonic arts loaded", demon_art.sprites.len());
 }
 
 fn load_fonts(
@@ -152,7 +232,7 @@ fn load_fonts(
     rune_fonts.idle = TextStyle {
         font: idle_font,
         font_size: 24.,
-        color: Color::GRAY,
+        color: Color::DARK_GRAY,
     };
 
     rune_fonts.display = TextStyle {
@@ -166,10 +246,61 @@ fn spawn_circle(
     mut commands: Commands,
     font_settings: Res<RuneTextStyles>,
     mut solution: ResMut<WordSelection>,
+    demons: Res<DemonArts>,
+    time: Res<Time>,
+    puzzles_list: Res<PuzzlesList>,
 ) {
-    spawn_puzzle(&mut commands, &mut solution, 140., 50., &font_settings.active, &font_settings.idle, vec![
-        ("damped", 3, 1), ("exorcise", 1, 2), ("subordinates", 8, 3)
-    ]);
+    spawn_level(puzzles_list.current, &puzzles_list,&mut commands,  &font_settings, &mut solution, &demons, &time);
+}
+
+fn spawn_next_level(
+    mut commands: Commands,
+    font_settings: Res<RuneTextStyles>,
+    mut solution: ResMut<WordSelection>,
+    demons: Res<DemonArts>,
+    time: Res<Time>,
+    mut puzzles_list: ResMut<PuzzlesList>,
+    mut puzzle_completion_reader: EventReader<PuzzleCompleteEvent>,
+    mut world_completion_writer: EventWriter<WordCompleteEvent>,
+    clear_entities: Query<Entity, With<LevelObject>>,
+) {
+    for _event in puzzle_completion_reader.read() {
+        for entity in clear_entities.iter() {
+            commands.entity(entity).despawn_recursive();
+        }
+        
+        puzzles_list.current += 1;
+        spawn_level(puzzles_list.current, &puzzles_list,&mut commands,  &font_settings, &mut solution, &demons, &time);
+
+        world_completion_writer.send(WordCompleteEvent{now_on_layer: 0});
+    }
+}
+
+fn spawn_level(
+    index: usize,
+    puzzles_list: &PuzzlesList,
+    commands: &mut Commands,
+    font_settings: &RuneTextStyles,
+    solution: &mut WordSelection,
+    demons: &DemonArts,
+    time: &Time,
+) {
+    let (demon_choice, rings) = &puzzles_list.list[index];
+
+    solution.complete_solution.clear();
+
+    let demon = &demons.sprites[*demon_choice];
+    spawn_puzzle(commands, solution, 140., 50., &font_settings.active, &font_settings.idle, 
+        rings,
+        demon.clone()
+    );
+
+    solution.current_layer_start_time = time.elapsed_seconds();
+    solution.built_word.clear();
+    solution.positions.clear();
+    solution.changed_this_frame = true;
+    solution.current_layer = 0;
+    solution.target_word = solution.complete_solution[0].clone();
 }
 
 fn spawn_puzzle(
@@ -179,7 +310,8 @@ fn spawn_puzzle(
     spacing: f32,
     active_text_style: &TextStyle,
     idle_text_style: &TextStyle,
-    rings: Vec<(&str, usize, usize)>,
+    rings: &Vec<(&str, usize, usize)>,
+    demon: Handle<Image>,
 ) {
     let mut cur_radius = base_radius;
     let active = 0;
@@ -202,6 +334,22 @@ fn spawn_puzzle(
             ..default()
         },
         WordDisplay {},
+        LevelObject {},
+    ));
+
+    commands.spawn((
+        SpriteBundle {
+            texture: demon,
+            transform: Transform::from_translation(Vec3::new(0., -0., -0.1)).with_scale(Vec3::new(4., 4., 4.)),
+            visibility: Visibility::Hidden,
+            ..default()
+        },
+        DemonFace {
+            base_scale: 4.,
+            fill_scale: 256.,
+            transition_time: 1.,
+        },
+        LevelObject {}
     ));
 }
 
@@ -215,7 +363,7 @@ fn spawn_ring(
     solution_start_index: &usize,
     layer: u32,
 ) {
-    let parent = commands.spawn((TransformBundle::default(), RingLayer::default(), InheritedVisibility::default())).id();
+    let parent = commands.spawn((TransformBundle::default(), RingLayer::default(), InheritedVisibility::default(), LevelObject {})).id();
     let length = word.len() - 1;
 
     let mut shuffled_word = vec![0; length];
@@ -240,7 +388,7 @@ fn spawn_ring(
 
         commands.spawn((Text2dBundle {
                 text: Text::from_section(character, text_style.clone()),
-                transform: Transform::from_translation(offset.extend(-0.1)),//.with_rotation(Quat::from_rotation_z(angle + (PI / 2.))),
+                transform: Transform::from_translation(offset.extend(-0.2)),//.with_rotation(Quat::from_rotation_z(angle + (PI / 2.))),
                 ..default()
             },
             LetterDisplay {
@@ -261,7 +409,7 @@ fn spawn_ring(
     commands.spawn((
         ShapeBundle {
             spatial: SpatialBundle {
-                transform: Transform::from_translation(Vec3::new(0., 0., -0.1)),
+                transform: Transform::from_translation(Vec3::new(0., 0., -0.5)),
                 ..default()
             },
             path: GeometryBuilder::build_as(&shape),
@@ -275,6 +423,10 @@ fn spawn_ring(
 
     commands.spawn((
         ShapeBundle {
+            spatial: SpatialBundle {
+                transform: Transform::from_translation(Vec3::new(0., 0., -0.1)),
+                ..default()
+            },
             ..default()
         },
         Stroke::new(Color::rgb(1.0, 0.3, 0.3), 4.0),
@@ -290,12 +442,16 @@ fn update_active_ring(
     mut letters: Query<(&mut Text, &mut LetterDisplay)>,
     mut rings: Query<(&mut Stroke, &LayerRing)>,
     text_styles: Res<RuneTextStyles>,
+    mut reset_button: Query<(&mut ResetButton, &mut Visibility), (Without<BackspaceButton>, Without<NextLevelButton>)>,
+    mut backspace_button: Query<(&mut BackspaceButton, &mut Visibility), (Without<ResetButton>, Without<NextLevelButton>)>,
+    mut next_level_button: Query<(&mut NextLevelButton, &mut Visibility), (Without<BackspaceButton>, Without<ResetButton>)>,
+    time: Res<Time>,
 ) {
     for completion in complete_events.read() {
         println!("completed! advancing to {}", completion.now_on_layer);
         let new_active = completion.now_on_layer;
 
-        
+        selection.current_layer_start_time = time.elapsed_seconds();
 
         for (mut text, mut letter) in letters.iter_mut() {
             let is_active = letter.layer == new_active;    
@@ -312,7 +468,7 @@ fn update_active_ring(
 
         for (mut stroke, ring) in rings.iter_mut() {
             let is_active = ring.layer == new_active;
-            stroke.color = if is_active { Color::WHITE } else { Color::GRAY };
+            stroke.color = if is_active { text_styles.active.color } else { text_styles.idle.color };
         }
 
         selection.built_word.clear();
@@ -320,12 +476,30 @@ fn update_active_ring(
         selection.changed_this_frame = true;
         selection.current_layer = new_active;
 
-        if new_active as usize >= selection.complete_solution.len() {
-            return;
+        let in_gameplay_step = (new_active as usize) < selection.complete_solution.len();
+        if in_gameplay_step {
+            selection.target_word = selection.complete_solution[new_active as usize].clone();
         }
-
-        selection.target_word = selection.complete_solution[new_active as usize].clone();
         
+        let gameplay_button_vis = if in_gameplay_step {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+
+        let (mut r_button, mut r_vis) = reset_button.single_mut();
+        r_button.active = in_gameplay_step;
+        *r_vis = gameplay_button_vis;
+
+        let (mut b_button, mut b_vis) = backspace_button.single_mut();
+        b_button.active = in_gameplay_step;
+        *b_vis = gameplay_button_vis;
+
+        let show_next_button = (new_active as usize) == selection.complete_solution.len();
+        let (mut nl_button, mut nl_vis) = next_level_button.single_mut();
+        nl_button.active = show_next_button;
+        *nl_vis = if show_next_button { Visibility::Visible } else { Visibility::Hidden };
+
     }
 }
 
@@ -406,49 +580,106 @@ fn check_complete(
     }
 }
 
+fn animate_demon(
+    selection: Res<WordSelection>,
+    mut demon_query: Query<(&mut Transform, &mut Visibility, &DemonFace)>,
+    time: Res<Time>,
+    mut complete_writer: EventWriter<PuzzleCompleteEvent>,
+) {
+    let (mut transform, mut vis, demon) = demon_query.single_mut();
+
+    if selection.current_layer as usize >= selection.complete_solution.len() {
+        *vis = Visibility::Visible;
+
+        if selection.current_layer as usize > selection.complete_solution.len() {
+            let t = (time.elapsed_seconds() - selection.current_layer_start_time) / demon.transition_time;
+            let scale = demon.base_scale.lerp(demon.fill_scale, t);
+            transform.scale = Vec3::splat(scale);
+
+            if t > 1. {
+                complete_writer.send(PuzzleCompleteEvent {});
+            }
+        }
+    }
+}
+
+fn handle_next_level(
+    button_query: Query<(&Transform, &NextLevelButton)>,
+    mouse_pos: Res<MousePosition>,
+    mouse_buttons: Res<ButtonInput<MouseButton>>,
+    mut complete_writer: EventWriter<WordCompleteEvent>,
+    selection: Res<WordSelection>,
+    keys: Res<ButtonInput<KeyCode>>,
+) {
+    let mut is_clicked = false;
+
+    let (transform, button) = button_query.single();
+
+    if button.active {
+        if let Some(pos) = mouse_pos.pos {
+            let button_pos = transform.translation.truncate();
+            if mouse_buttons.just_pressed(MouseButton::Left) && pos.distance(button_pos) < 50. {
+                is_clicked = true;
+            }
+        }
+
+        if is_clicked || keys.just_pressed(KeyCode::Enter) {
+            complete_writer.send(WordCompleteEvent { now_on_layer: selection.current_layer + 1} );
+        }
+    }
+}
+
 fn handle_reset(
     mut selection: ResMut<WordSelection>,
-    button_query: Query<&Transform, With<ResetButton>>,
+    button_query: Query<(&Transform, &ResetButton)>,
     mouse_pos: Res<MousePosition>,
     mouse_buttons: Res<ButtonInput<MouseButton>>,
 ) {
     let mut is_clicked = false;
 
-    if let Some(pos) = mouse_pos.pos {
-        let button_pos = button_query.single().translation.truncate();
-        if mouse_buttons.just_pressed(MouseButton::Left) && pos.distance(button_pos) < 50. {
-            is_clicked = true;
-        }
-    }
+    let (transform, button) = button_query.single();
 
-    if is_clicked {
-        selection.built_word.clear();
-        selection.positions.clear();
-        selection.changed_this_frame = true;
+    if button.active {
+        if let Some(pos) = mouse_pos.pos {
+            let button_pos = transform.translation.truncate();
+            if mouse_buttons.just_pressed(MouseButton::Left) && pos.distance(button_pos) < 50. {
+                is_clicked = true;
+            }
+        }
+
+        if is_clicked {
+            selection.built_word.clear();
+            selection.positions.clear();
+            selection.changed_this_frame = true;
+        }
     }
 }
 
 fn handle_backspace(
     mut selection: ResMut<WordSelection>,
     keys: Res<ButtonInput<KeyCode>>,
-    button_query: Query<&Transform, With<BackspaceButton>>,
+    button_query: Query<(&Transform, &BackspaceButton)>,
     mouse_pos: Res<MousePosition>,
     mouse_buttons: Res<ButtonInput<MouseButton>>,
 ) {
     let mut is_clicked = false;
 
-    if let Some(pos) = mouse_pos.pos {
-        let button_pos = button_query.single().translation.truncate();
-        if mouse_buttons.just_pressed(MouseButton::Left) && pos.distance(button_pos) < 50. {
-            is_clicked = true;
-        }
-    }
+    let (transform, button) = button_query.single();
 
-    if is_clicked || keys.just_pressed(KeyCode::Backspace) {
-        if selection.built_word.len() > 0 {
-            selection.built_word.pop();
-            selection.positions.pop();
-            selection.changed_this_frame = true;
+    if button.active {
+        if let Some(pos) = mouse_pos.pos {
+            let button_pos = transform.translation.truncate();
+            if mouse_buttons.just_pressed(MouseButton::Left) && pos.distance(button_pos) < 50. {
+                is_clicked = true;
+            }
+        }
+    
+        if is_clicked || keys.just_pressed(KeyCode::Backspace) {
+            if selection.built_word.len() > 0 {
+                selection.built_word.pop();
+                selection.positions.pop();
+                selection.changed_this_frame = true;
+            }
         }
     }
 }
