@@ -65,7 +65,7 @@ impl Default for WordList {
 
         for word in file_contents.split_whitespace() {
             if is_valid_word(word) {
-                list.all_valid_words.push(word.to_string());
+                list.all_valid_words.push(word.to_string().to_ascii_uppercase());
             }
         }
 

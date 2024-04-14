@@ -45,21 +45,21 @@ fn main() {
             list: vec![
                 (0, vec![("mayhem", 3, 1)]),
                 (0, vec![("entice", 4, 4)]),
-                (0, vec![("grasping", 3, 4)]),
-                (0, vec![("neuron", 4, 2), ("scraps", 2, 3)]),
+                (2, vec![("grasping", 3, 4)]),
+                (3, vec![("neuron", 4, 2), ("scraps", 2, 3)]),
                 (0, vec![("lethal", 3, 2), ("rocker", 1, 3)]),
-                (0, vec![("tyrant", 3, 5), ("turncoat", 2, 3)]),
+                (2, vec![("tyrant", 3, 5), ("turncoat", 2, 3)]),
                 (0, vec![("expire", 2, 2), ("lawful", 4, 3), ("gaming", 3, 3)]),
-                (0, vec![("threat", 3, 3), ("divulged", 1, 3)]),
+                (3, vec![("threat", 3, 3), ("divulged", 1, 3)]),
                 (0, vec![("dashed", 3, 0), ("dunked", 1, 3), ("dumped", 3, 3)]),
                 (0, vec![("medium", 1, 4), ("eulogize", 4, 1)]),
-                (0, vec![("edible", 4, 3), ("snacks", 2, 3), ("spoils", 3, 1)]),
+                (3, vec![("edible", 4, 3), ("snacks", 2, 3), ("spoils", 3, 1)]),
                 (1, vec![("damped", 3, 1), ("exorcise", 1, 2)]),
                 (0, vec![("cosmic", 2, 1), ("sundries", 3, 6)]),
-                (0, vec![("cleric", 2, 2), ("shirks", 4, 3), ("damned", 3, 3)]),
+                (2, vec![("cleric", 2, 2), ("shirks", 4, 3), ("damned", 3, 3)]),
                 (0, vec![("dismayed", 4, 6), ("catholic", 1, 2)]),
                 (0, vec![("thrust", 4, 2), ("rapier", 1, 3), ("withdrew", 4, 3)]),
-                (0, vec![("teapot", 1, 2), ("subordinates", 5, 3)]),
+                (2, vec![("teapot", 1, 2), ("subordinates", 5, 3)]),
                 (0, vec![("cosmetic", 2, 6), ("ghosting", 4, 3)]),
             ],
             current: 0,
@@ -229,6 +229,8 @@ fn load_demons(
 ) {
     demon_art.sprites.push(asset_server.load("sprites/demon01.png"));
     demon_art.sprites.push(asset_server.load("sprites/demon02.png"));
+    demon_art.sprites.push(asset_server.load("sprites/demon03.png"));
+    demon_art.sprites.push(asset_server.load("sprites/demon04.png"));
 
     println!("{} demonic arts loaded", demon_art.sprites.len());
 }
@@ -587,6 +589,7 @@ fn check_complete(
     let bytes = selection.built_word.as_bytes();
 
     if selection.built_word.len() >= selection.target_word.len() && bytes[0].to_ascii_uppercase() == bytes[bytes.len() - 1].to_ascii_uppercase() {
+        println!("checking if {} is valid solution for {}", selection.built_word, selection.target_word);
         if selection.built_word.to_ascii_uppercase() == selection.target_word.to_ascii_uppercase() {
             complete_writer.send(WordCompleteEvent { now_on_layer: selection.current_layer + 1});
             println!("perfect solve!");
