@@ -1,7 +1,6 @@
 use std::f32::consts::PI;
-use bevy::{asset::{self, AssetMetaCheck}, prelude::*};
+use bevy::{asset::AssetMetaCheck, prelude::*};
 use bevy_prototype_lyon::prelude::*;
-use rand::random;
 
 use crate::worldlist::*;
 use crate::squashes::*;
@@ -40,6 +39,7 @@ fn main() {
         .insert_resource(DemonArts::default())
         .insert_resource(MousePosition {
             pos: None,
+            just_clicked: false,
         })
         .insert_resource(PuzzlesList {
             list: vec![
@@ -115,6 +115,7 @@ struct DemonArts {
 #[derive(Resource)]
 struct MousePosition {
     pos: Option<Vec2>,
+    just_clicked: bool,
 }
 
 #[derive(Component)]
@@ -530,14 +531,29 @@ fn update_mouse_position(
     windows: Query<&Window>,
     cameras: Query<(&Camera, &GlobalTransform)>,
     mut mouse_pos_state: ResMut<MousePosition>,
+    mouse_buttons: Res<ButtonInput<MouseButton>>,
+    touches: Res<Touches>,
 ) {
     if let Some(viewport_position) = windows.single().cursor_position() {
         let (camera, camera_transform) = cameras.single();
 
         mouse_pos_state.pos = camera.viewport_to_world_2d(camera_transform, viewport_position);
+        mouse_pos_state.just_clicked = mouse_buttons.just_pressed(MouseButton::Left);
+    }
+    else if touches.any_just_pressed() {
+        if let Some(viewport_position) = touches.first_pressed_position() {
+            let (camera, camera_transform) = cameras.single();
+            mouse_pos_state.pos = camera.viewport_to_world_2d(camera_transform, viewport_position);
+            mouse_pos_state.just_clicked = true;
+        }
+        else {
+            mouse_pos_state.pos = None;
+            mouse_pos_state.just_clicked = false;
+        }
     }
     else {
         mouse_pos_state.pos = None;
+        mouse_pos_state.just_clicked = false;
     }
 }
 
@@ -545,7 +561,6 @@ fn select_letters(
     mut selection: ResMut<WordSelection>,
     mut letters: Query<(&LetterDisplay, &Transform, &mut SquishEffect)>,
     mouse_state: Res<MousePosition>,
-    mouse_buttons: Res<ButtonInput<MouseButton>>,
     mut character_events: EventReader<ReceivedCharacter>,
 ) {
     let mut recieved_chars = Vec::new();
@@ -560,7 +575,7 @@ fn select_letters(
         if letter.active {
             let mut mouse_selected = false;
 
-            if mouse_buttons.just_pressed(MouseButton::Left) {
+            if mouse_state.just_clicked {
                 if let Some(mouse_pos) = mouse_state.pos {
                     if transform.translation.truncate().distance(mouse_pos) < letter.radius {
                         mouse_selected = true;
@@ -630,7 +645,6 @@ fn animate_demon(
 fn handle_next_level(
     button_query: Query<(&Transform, &NextLevelButton)>,
     mouse_pos: Res<MousePosition>,
-    mouse_buttons: Res<ButtonInput<MouseButton>>,
     mut complete_writer: EventWriter<WordCompleteEvent>,
     selection: Res<WordSelection>,
     keys: Res<ButtonInput<KeyCode>>,
@@ -642,7 +656,7 @@ fn handle_next_level(
     if button.active {
         if let Some(pos) = mouse_pos.pos {
             let button_pos = transform.translation.truncate();
-            if mouse_buttons.just_pressed(MouseButton::Left) && pos.distance(button_pos) < 50. {
+            if mouse_pos.just_clicked && pos.distance(button_pos) < 50. {
                 is_clicked = true;
             }
         }
@@ -657,7 +671,6 @@ fn handle_reset(
     mut selection: ResMut<WordSelection>,
     mut button_query: Query<(&Transform, &ResetButton, &mut SquishEffect)>,
     mouse_pos: Res<MousePosition>,
-    mouse_buttons: Res<ButtonInput<MouseButton>>,
 ) {
     let mut is_clicked = false;
 
@@ -666,7 +679,7 @@ fn handle_reset(
     if button.active {
         if let Some(pos) = mouse_pos.pos {
             let button_pos = transform.translation.truncate();
-            if mouse_buttons.just_pressed(MouseButton::Left) && pos.distance(button_pos) < 50. {
+            if mouse_pos.just_clicked && pos.distance(button_pos) < 50. {
                 is_clicked = true;
             }
         }
@@ -686,7 +699,6 @@ fn handle_backspace(
     keys: Res<ButtonInput<KeyCode>>,
     mut button_query: Query<(&Transform, &BackspaceButton, &mut SquishEffect)>,
     mouse_pos: Res<MousePosition>,
-    mouse_buttons: Res<ButtonInput<MouseButton>>,
 ) {
     let mut is_clicked = false;
 
@@ -695,7 +707,7 @@ fn handle_backspace(
     if button.active {
         if let Some(pos) = mouse_pos.pos {
             let button_pos = transform.translation.truncate();
-            if mouse_buttons.just_pressed(MouseButton::Left) && pos.distance(button_pos) < 50. {
+            if mouse_pos.just_clicked && pos.distance(button_pos) < 50. {
                 is_clicked = true;
             }
         }
